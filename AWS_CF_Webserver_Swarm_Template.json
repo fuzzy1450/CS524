@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "AWS CloudFormation Template: Creates a webserver .",
+    "Description": "AWS CloudFormation Template: Creates 4 webservers behind a load balancer.",
     "Metadata": {
         "License": "Apache-2.0"
     },
