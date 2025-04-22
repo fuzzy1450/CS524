@@ -1,0 +1,354 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation Template: Creates a webserver .",
+    "Metadata": {
+        "License": "Apache-2.0"
+    },
+    "Parameters": {
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+        },
+        "InstanceType": {
+            "Description": "WebServer EC2 instance type",
+            "Type": "String",
+            "AllowedValues": [
+                "t2.micro"
+                ],
+            "Default": "t2.micro",
+            "ConstraintDescription": "must be a valid EC2 instance type."
+        },
+        "SSHLocation": {
+            "Description": "The IP address range that can be used to SSH to the EC2 instances",
+            "Type": "String",
+            "Default": "192.168.1.0/0",
+            "MinLength": 9,
+            "MaxLength": 18,
+            "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+        },
+        "LatestAmiId": {
+            "Type": "String",
+            "Default": "ami-00a929b66ed6e0de6"
+        }
+    },
+    "Resources": {
+		"MyVPC": {
+			"Type": "AWS::EC2::VPC",
+			"Properties": {
+				"CidrBlock": "10.0.0.0/16",
+				"EnableDnsSupport": true,
+				"EnableDnsHostnames": true,
+				"Tags": [
+					{ "Key": "Name", "Value": "MyVPC" }
+				]
+			}
+		},
+		"IntSubnet": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"VpcId": { "Ref": "MyVPC" },
+				"CidrBlock": "10.0.0.0/24",
+				"AvailabilityZone": {
+					"Fn::Select": [
+						0,
+						{ "Fn::GetAZs": { "Ref": "AWS::Region" } }
+					]
+				},
+				"Tags": [
+					{ "Key": "Name", "Value": "MySubnet" }
+				]
+			}
+		},
+        "InstanceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Metadata": {
+                "guard": {
+                    "SuppressedRules": [
+                        "INCOMING_SSH_DISABLED"
+                    ]
+                }
+            },
+            "Properties": {
+                "GroupDescription": "Enable SSH access via port 22 and HTTP access via port 80",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "SSHLocation"
+                        }
+                    },
+					{
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+		"LoadBalancer": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Fn::GetAtt": [
+                            "InstanceSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+				"NetworkInterfaces": [
+				{
+					"AssociatePublicIpAddress": "true",
+					"DeviceIndex": "0",
+					"SubnetId": { "Ref": "IntSubnet" },
+					"PrivateIpAddress": "10.0.0.1"
+				}
+				],
+				"UserData": {
+				  "Fn::Base64": {
+					"Fn::Join": [
+					  "",
+					  [
+						"#!/bin/bash\n",
+						"yum update -y\n",
+						"yum install nginx -y\n",
+						"curl https://raw.githubusercontent.com/fuzzy1450/CS524/refs/heads/main/LoadBalancer_nginx.conf -o /etc/nginx/nginx.conf\n",
+						"systemctl start nginx\n",
+						"systemctl enable nginx\n"
+					  ]
+					]
+				  }
+				}
+            }
+        },
+		"S1": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Fn::GetAtt": [
+                            "InstanceSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+				"NetworkInterfaces": [
+				{
+					"AssociatePublicIpAddress": "true",
+					"DeviceIndex": "0",
+					"SubnetId": { "Ref": "IntSubnet" },
+					"PrivateIpAddress": "10.0.0.2"
+				}
+				],
+				"UserData": {
+				  "Fn::Base64": {
+					"Fn::Join": [
+					  "",
+					  [
+						"#!/bin/bash\n",
+						"yum update -y\n",
+						"yum install nginx -y\n",
+						"curl https://raw.githubusercontent.com/fuzzy1450/CS524/refs/heads/main/Server1.html -o /usr/share/nginx/html/index.html\n",
+						"systemctl start nginx\n",
+						"systemctl enable nginx\n"
+					  ]
+					]
+				  }
+				}
+            }
+        },
+		"S2": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Fn::GetAtt": [
+                            "InstanceSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+				"NetworkInterfaces": [
+				{
+					"AssociatePublicIpAddress": "true",
+					"DeviceIndex": "0",
+					"SubnetId": { "Ref": "IntSubnet" },
+					"PrivateIpAddress": "10.0.0.3"
+				}
+				],
+				"UserData": {
+				  "Fn::Base64": {
+					"Fn::Join": [
+					  "",
+					  [
+						"#!/bin/bash\n",
+						"yum update -y\n",
+						"yum install nginx -y\n",
+						"curl https://raw.githubusercontent.com/fuzzy1450/CS524/refs/heads/main/Server2.html -o /usr/share/nginx/html/index.html\n",
+						"systemctl start nginx\n",
+						"systemctl enable nginx\n"
+					  ]
+					]
+				  }
+				}
+            }
+        },
+		"S3": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Fn::GetAtt": [
+                            "InstanceSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+				"NetworkInterfaces": [
+				{
+					"AssociatePublicIpAddress": "true",
+					"DeviceIndex": "0",
+					"SubnetId": { "Ref": "IntSubnet" },
+					"PrivateIpAddress": "10.0.0.4"
+				}
+				],
+				"UserData": {
+				  "Fn::Base64": {
+					"Fn::Join": [
+					  "",
+					  [
+						"#!/bin/bash\n",
+						"yum update -y\n",
+						"yum install nginx -y\n",
+						"curl https://raw.githubusercontent.com/fuzzy1450/CS524/refs/heads/main/Server3.html -o /usr/share/nginx/html/index.html\n",
+						"systemctl start nginx\n",
+						"systemctl enable nginx\n"
+					  ]
+					]
+				  }
+				}
+            }
+        },
+		"S4": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Fn::GetAtt": [
+                            "InstanceSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+				"NetworkInterfaces": [
+				{
+					"AssociatePublicIpAddress": "true",
+					"DeviceIndex": "0",
+					"SubnetId": { "Ref": "IntSubnet" },
+					"PrivateIpAddress": "10.0.0.5"
+				}
+				],
+				"UserData": {
+				  "Fn::Base64": {
+					"Fn::Join": [
+					  "",
+					  [
+						"#!/bin/bash\n",
+						"yum update -y\n",
+						"yum install nginx -y\n",
+						"curl https://raw.githubusercontent.com/fuzzy1450/CS524/refs/heads/main/Server4.html -o /usr/share/nginx/html/index.html\n",
+						"systemctl start nginx\n",
+						"systemctl enable nginx\n"
+					  ]
+					]
+				  }
+				}
+            }
+        }
+    },
+    "Outputs": {
+        "InstanceIds": {
+            "Description": "InstanceId of the newely created LoadBalancer",
+            "Value": {
+                "Ref": "LoadBalancer"
+            }
+        },
+        "AZ": {
+            "Description": "Availability Zone of the newly created LoadBalancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LoadBalancer",
+                    "AvailabilityZone"
+                ]
+            }
+        },
+        "PublicDNS": {
+            "Description": "Public DNSName of the newly created LoadBalancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LoadBalancer",
+                    "PublicDnsName"
+                ]
+            }
+        },
+        "PublicIP": {
+            "Description": "Public IP address of the newly created LoadBalancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LoadBalancer",
+                    "PublicIp"
+                ]
+            }
+        }
+    }
+}
